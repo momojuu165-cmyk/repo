@@ -243,20 +243,6 @@ class _StaffTabState extends State<_StaffTab> {
                                       Text('توليد كود دخول')
                                     ])),
                                 if (isAdmin)
-                                  PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Row(children: [
-                                        Icon(
-                                            u.isActive
-                                                ? Icons.block
-                                                : Icons.check_circle,
-                                            size: 18),
-                                        const SizedBox(width: 8),
-                                        Text(u.isActive
-                                            ? 'إيقاف الحساب'
-                                            : 'تفعيل الحساب')
-                                      ])),
-                                if (isAdmin)
                                   const PopupMenuItem(
                                       value: 'delete',
                                       child: Row(children: [
@@ -289,8 +275,18 @@ class _StaffTabState extends State<_StaffTab> {
         break;
       case 'toggle':
         if (u.id != null) {
-          await _dao.update(u.copyWith(isActive: !u.isActive));
-          _load();
+          final updated = await _dao.setActive(u.id!, !u.isActive);
+          if (!updated) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('فشل تحديث حالة ${u.name}${_dao.lastError != null ? ': ${_dao.lastError}' : ''}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          await _load();
         }
         break;
       case 'gencode':
@@ -930,7 +926,7 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final customers = await _dao.getAll();
+    final customers = await _dao.getAll(activeOnly: false);
     if (mounted)
       setState(() {
         _customers = customers;
@@ -1072,17 +1068,6 @@ class _CustomersTabState extends State<_CustomersTab> {
                                     Text(
                                         c.isVip ? 'إلغاء VIP' : 'تعيين كـ VIP'),
                                   ])),
-                              PopupMenuItem(
-                                  value: 'blacklist',
-                                  child: Row(children: [
-                                    const Icon(Icons.block,
-                                        color: Color(AppColors.blacklistInt),
-                                        size: 18),
-                                    const SizedBox(width: 8),
-                                    Text(c.isBlacklisted
-                                        ? 'رفع الحظر'
-                                        : 'حظر العميل'),
-                                  ])),
                             ],
                           ),
                           onTap: () => _showCustomerDetail(c),
@@ -1118,8 +1103,18 @@ class _CustomersTabState extends State<_CustomersTab> {
         final newStatus = c.isVip
             ? AppConstants.customerStatusRegular
             : AppConstants.customerStatusVip;
-        await _dao.update(c.copyWith(customerStatus: newStatus));
-        _load();
+        final statusUpdated = await _dao.setCustomerStatus(c.id!, newStatus);
+        if (!statusUpdated) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('فشل تحديث حالة العميل'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        await _load();
         break;
       case 'blacklist':
         if (!c.isBlacklisted) {
@@ -1148,8 +1143,18 @@ class _CustomersTabState extends State<_CustomersTab> {
         final newStatus = c.isBlacklisted
             ? AppConstants.customerStatusRegular
             : AppConstants.customerStatusBlacklist;
-        await _dao.update(c.copyWith(customerStatus: newStatus));
-        _load();
+        final statusUpdated = await _dao.setCustomerStatus(c.id!, newStatus);
+        if (!statusUpdated) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('فشل تحديث حالة العميل'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        await _load();
         break;
     }
   }

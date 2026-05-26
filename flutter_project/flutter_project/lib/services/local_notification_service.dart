@@ -1,8 +1,12 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../services/notification_navigation_service.dart';
+
 // Background notification handler — must be top-level
 @pragma('vm:entry-point')
-void onNotificationBackground(NotificationResponse response) {}
+void onNotificationBackground(NotificationResponse response) {
+  NotificationNavigationService.persistPayload(response.payload);
+}
 
 class LocalNotificationService {
   static final LocalNotificationService _instance =
@@ -21,13 +25,11 @@ class LocalNotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    // Request Android 13+ notification permission
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
 
-    // Create a high-importance channel so notifications appear as heads-up
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -53,7 +55,9 @@ class LocalNotificationService {
 
     await _plugin.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: (_) {},
+      onDidReceiveNotificationResponse: (response) {
+        NotificationNavigationService.handlePayload(response.payload);
+      },
       onDidReceiveBackgroundNotificationResponse: onNotificationBackground,
     );
 
@@ -63,6 +67,7 @@ class LocalNotificationService {
   Future<void> showNotification({
     required String title,
     required String body,
+    String? payload,
   }) async {
     if (!_initialized) await init();
     const androidDetails = AndroidNotificationDetails(
@@ -75,7 +80,6 @@ class LocalNotificationService {
       enableVibration: true,
       enableLights: true,
       showWhen: true,
-      // Heads-up display even when screen is on
       fullScreenIntent: false,
       visibility: NotificationVisibility.public,
     );
@@ -87,6 +91,6 @@ class LocalNotificationService {
         presentSound: true,
       ),
     );
-    await _plugin.show(_notifId++, title, body, notifDetails);
+    await _plugin.show(_notifId++, title, body, notifDetails, payload: payload);
   }
 }

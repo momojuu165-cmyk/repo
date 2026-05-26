@@ -55,25 +55,6 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
-        <!-- FCM: Required for system-tray push notifications -->
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
-            </intent-filter>
-        </service>
-
-        <!-- High-priority notification channel for Android 8+ -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="store_high_channel"/>
-
-        <!-- Default notification icon -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher"/>
-
         <!-- FileProvider for image_picker on older Android -->
         <provider
             android:name="androidx.core.content.FileProvider"

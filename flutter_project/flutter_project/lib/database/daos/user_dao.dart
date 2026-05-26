@@ -181,12 +181,32 @@ class UserDao {
     }
   }
 
+  Future<bool> setActive(int id, bool isActive) async {
+    try {
+      final response = await _client
+          .from('users')
+          .update({'is_active': isActive})
+          .eq('id', id)
+          .select('id');
+      return (response as List).isNotEmpty;
+    } catch (error, stack) {
+      lastError = error.toString();
+      debugPrint('UserDao.setActive failed: $error');
+      debugPrint('$stack');
+      return false;
+    }
+  }
+
   Future<int> update(User u) async {
     try {
       final map = u.toMap()..remove('id');
-      await _client.from('users').update(map).eq('id', u.id!);
-      return 1;
-    } catch (_) {
+      final response =
+          await _client.from('users').update(map).eq('id', u.id!).select('id');
+      return (response as List).isNotEmpty ? 1 : -1;
+    } catch (error, stack) {
+      lastError = error.toString();
+      debugPrint('UserDao.update failed: $error');
+      debugPrint('$stack');
       return -1;
     }
   }

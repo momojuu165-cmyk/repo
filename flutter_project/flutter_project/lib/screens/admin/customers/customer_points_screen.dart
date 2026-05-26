@@ -19,6 +19,7 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
   List<CustomerPointsLog> _log = [];
   bool _loading = true;
   bool _settling = false;
+  bool _suppressProviderReload = false;
   late Customer _customer;
   CustomerProvider? _providerRef;
 
@@ -29,18 +30,19 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
     _load();
     // Listen for provider changes (e.g. after an invoice is saved) and reload
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _providerRef = context.read<CustomerProvider>();
-        _providerRef!.addListener(_onProviderChanged);
-      }
+      if (!mounted) return;
+      _providerRef = context.read<CustomerProvider>();
+      _providerRef!.addListener(_onProviderChanged);
     });
   }
 
   void _onProviderChanged() {
+    if (!mounted || _suppressProviderReload) return;
+
     // Reload points log and fresh customer balance whenever the provider notifies.
     // We intentionally reload even during an active fetch so updates are not lost
     // if the provider notifies while this screen is loading.
-    if (mounted) _load();
+    _load();
   }
 
   @override
@@ -52,7 +54,11 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
   String? _errorMsg;
 
   Future<void> _load() async {
-    setState(() { _loading = true; _errorMsg = null; });
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
 
     final provider = context.read<CustomerProvider>();
 
@@ -66,17 +72,18 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
         fresh = await provider.getById(_customer.id!);
       } catch (_) {}
 
-      if (mounted) {
-        setState(() {
-          _log = log;
-          if (fresh != null) _customer = fresh;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _log = log;
+        if (fresh != null) _customer = fresh;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() { _loading = false; _errorMsg = e.toString(); });
-      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _errorMsg = e.toString();
+      });
     }
   }
 
@@ -93,6 +100,8 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final provider = context.read<CustomerProvider>();
 
+    debugPrint('[PointsScreen] Starting settlement for customer ${_customer.id}');
+
     if (_customer.id == null) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -104,14 +113,23 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
       return;
     }
 
-    if (_settling) return;
+    if (_settling) {
+      debugPrint('[PointsScreen] Already settling, ignoring duplicate tap.');
+      return;
+    }
 
     setState(() => _settling = true);
+    _suppressProviderReload = true;
 
     try {
       await action(provider);
-      if (!mounted) return;
+      debugPrint('[PointsScreen] Settlement action completed for customer ${_customer.id}');
+      if (!mounted) {
+        debugPrint('[PointsScreen] Widget unmounted after settlement!');
+        return;
+      }
       await _load();
+      debugPrint('[PointsScreen] Reloaded after settlement for customer ${_customer.id}');
       messenger.showSnackBar(
         SnackBar(
           content: Text(successMessage),
@@ -120,7 +138,11 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        debugPrint('[PointsScreen] Widget unmounted after settlement error!');
+        return;
+      }
+      debugPrint('[PointsScreen] Error in settlement: $e');
       messenger.showSnackBar(
         SnackBar(
           content: Text('خطأ في التسوية: $e'),
@@ -129,7 +151,11 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _settling = false);
+      _suppressProviderReload = false;
+      if (mounted) {
+        debugPrint('[PointsScreen] Settlement flow finished, setting _settling = false');
+        setState(() => _settling = false);
+      }
     }
   }
 

@@ -3,15 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/daos/notification_dao.dart';
 import '../models/app_notification.dart';
 import '../services/local_notification_service.dart';
+import '../services/notification_navigation_service.dart';
 
 /// Provides real-time in-app notifications via Supabase Realtime.
-///
-/// KEY RULE — sender suppression:
-///   When THIS device sends a notification (via sendToRole/sendToUser/sendToAll),
-///   the inserted row ID is stored in [_sentByMeIds].
-///   Any realtime INSERT event or list refresh that matches an ID in that set
-///   is silently ignored on THIS device — no phone-tray alert, no list entry.
-///   Everyone ELSE who matches the recipient criteria sees it normally.
 class NotificationProvider extends ChangeNotifier {
   final NotificationDao _dao = NotificationDao();
   SupabaseClient get _client => Supabase.instance.client;
@@ -25,8 +19,6 @@ class NotificationProvider extends ChangeNotifier {
   int? _currentUserId;
   String? _currentRole;
 
-  /// IDs of notifications sent BY this device in the current session.
-  /// These are hidden from the sender's own tray and notification list.
   final Set<int> _sentByMeIds = {};
 
   List<AppNotification> get notifications => _notifications;
@@ -34,7 +26,6 @@ class NotificationProvider extends ChangeNotifier {
   bool get loading => _loading;
   bool get hasUnread => _unreadCount > 0;
 
-  /// Call after login — starts listening for this user's notifications.
   Future<void> init(int userId, String? role) async {
     _currentUserId = userId;
     _currentRole = role;
@@ -49,7 +40,6 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final all = await _dao.getForUser(_currentUserId!, _currentRole);
-      // Filter out any notifications this device sent — sender should not see them
       _notifications = all
           .where((n) => n.id == null || !_sentByMeIds.contains(n.id!))
           .toList();
@@ -57,6 +47,43 @@ class NotificationProvider extends ChangeNotifier {
     } catch (_) {}
     _loading = false;
     notifyListeners();
+  }
+
+  Future<void> _handleIncomingNotification(Map<String, dynamic> data) async {
+    final notifId = data['id'] as int?;
+    if (notifId != null && _sentByMeIds.contains(notifId)) {
+      return;
+    }
+
+    final notifUserId = data['user_id'];
+    final notifRole = data['user_role'] as String?;
+    final isForMe =
+        (notifUserId != null &&
+            notifUserId.toString() == _currentUserId.toString()) ||
+        (notifUserId == null && notifRole != null && notifRole == _currentRole) ||
+        (notifUserId == null && notifRole == null);
+
+    if (!isForMe) {
+      return;
+    }
+
+    final title = data['title'] as String? ?? 'إشعار جديد';
+    final body = data['body'] as String? ?? '';
+    final referenceType =
+        (data['reference_type'] as String?) ?? (data['type'] as String?);
+    final referenceId = data['reference_id'] as int?;
+    final payload = NotificationNavigationService.buildPayload(
+      title: title,
+      body: body,
+      referenceType: referenceType,
+      referenceId: referenceId,
+    );
+
+    await _localSvc.showNotification(title: title, body: body, payload: payload);
+
+    if (notifId != null) {
+      await NotificationNavigationService.recordProcessedNotification(notifId);
+    }
   }
 
   void _startRealtime() {
@@ -69,32 +96,7 @@ class NotificationProvider extends ChangeNotifier {
           table: 'app_notifications',
           callback: (payload) async {
             try {
-              final data = payload.newRecord;
-              final notifId = data['id'] as int?;
-
-              // If this device sent the notification, suppress it entirely —
-              // no tray alert, no list update for this event.
-              if (notifId != null && _sentByMeIds.contains(notifId)) {
-                return;
-              }
-
-              final notifUserId = data['user_id'];
-              final notifRole = data['user_role'] as String?;
-
-              // Show phone-tray alert only when this notification is addressed to ME
-              final isForMe =
-                  (notifUserId != null &&
-                      notifUserId.toString() == _currentUserId.toString()) ||
-                  (notifUserId == null &&
-                      notifRole != null &&
-                      notifRole == _currentRole) ||
-                  (notifUserId == null && notifRole == null);
-
-              if (isForMe) {
-                final title = data['title'] as String? ?? 'إشعار جديد';
-                final body = data['body'] as String? ?? '';
-                await _localSvc.showNotification(title: title, body: body);
-              }
+              await _handleIncomingNotification(payload.newRecord);
             } catch (_) {}
             await load();
           },
@@ -119,14 +121,9 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Sender suppression — call this when sending via PushNotificationService ─
-  /// Track a notification ID that was sent BY this device so it is suppressed
-  /// from appearing in this user's tray and notification list.
   void trackSentId(int id) {
     if (id > 0) _sentByMeIds.add(id);
   }
-
-  // ── Send helpers — capture inserted ID to suppress on sender's device ──────
 
   Future<void> sendToRole(String role, String title, String body,
       {String type = 'general'}) async {

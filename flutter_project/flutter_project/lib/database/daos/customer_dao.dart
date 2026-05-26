@@ -144,11 +144,25 @@ class CustomerDao {
     }
   }
 
+  Future<bool> setCustomerStatus(int id, String customerStatus) async {
+    try {
+      final response = await _client
+          .from('customers')
+          .update({'customer_status': customerStatus})
+          .eq('id', id)
+          .select('id');
+      return (response as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<int> update(Customer c) async {
     try {
       final map = c.toMap()..remove('id');
-      await _client.from('customers').update(map).eq('id', c.id!);
-      return 1;
+      final response =
+          await _client.from('customers').update(map).eq('id', c.id!).select('id');
+      return (response as List).isNotEmpty ? 1 : -1;
     } catch (_) {
       return -1;
     }

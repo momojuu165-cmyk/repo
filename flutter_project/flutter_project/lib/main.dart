@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'app.dart';
 import 'providers/auth_provider.dart';
 import 'screens/splash/splash_screen.dart';
-import 'utils/supabase_config.dart';
-import 'services/local_notification_service.dart';
+import 'services/notification_background_worker.dart';
+import 'services/notification_navigation_service.dart';
 import 'services/push_notification_service.dart';
-import 'app.dart';
+import 'utils/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,13 +18,13 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  // Initialize local notifications (replaces Firebase push notifications)
-  // Notifications appear in the system tray even when the phone is locked.
+  final navigatorKey = GlobalKey<NavigatorState>();
+  NotificationNavigationService.bindNavigator(navigatorKey);
+
   try {
     await PushNotificationService.initialize();
-  } catch (_) {
-    // Permission denied or initialisation failed — app still works
-  }
+    await NotificationBackgroundWorker.configure();
+  } catch (_) {}
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
@@ -37,17 +38,20 @@ void main() async {
     systemNavigationBarContrastEnforced: true,
   ));
 
-  runApp(const AppBootstrap());
+  runApp(AppBootstrap(navigatorKey: navigatorKey));
 }
 
 class AppBootstrap extends StatelessWidget {
-  const AppBootstrap({super.key});
+  const AppBootstrap({super.key, required this.navigatorKey});
+
+  final GlobalKey<NavigatorState> navigatorKey;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AuthProvider()..tryAutoLogin(),
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           brightness: Brightness.dark,
@@ -77,21 +81,30 @@ class _SplashGate extends StatefulWidget {
 
 class _SplashGateState extends State<_SplashGate> {
   bool _splashDone = false;
+  bool _pendingPayloadConsumed = false;
 
   void _onSplashComplete() {
     if (mounted) setState(() => _splashDone = true);
+  }
+
+  void _consumePendingPayloadOnce() {
+    if (_pendingPayloadConsumed) return;
+    _pendingPayloadConsumed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await NotificationNavigationService.consumePendingPayload();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    // If already authenticated from a saved session, skip splash entirely
-    // and go directly to the app so the user lands on their last screen.
     if (auth.isInitialized && auth.isAuthenticated) {
+      _consumePendingPayloadOnce();
       return const StoreApp();
     }
- 
+
     if (!_splashDone || !auth.isInitialized) {
       return SplashScreen(onComplete: _onSplashComplete);
     }

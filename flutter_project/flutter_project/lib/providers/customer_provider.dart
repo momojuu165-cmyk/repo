@@ -24,6 +24,14 @@ class CustomerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _patchCustomerPoints(int customerId, int newPoints) {
+    final index = _customers.indexWhere((customer) => customer.id == customerId);
+    if (index == -1) return;
+
+    _customers[index] = _customers[index].copyWith(points: newPoints);
+    notifyListeners();
+  }
+
   Future<List<Customer>> getAll() => _dao.getAll();
   Future<List<Customer>> search(String query) => _dao.search(query);
   Future<Customer?> getById(int id) => _dao.findById(id);
@@ -116,23 +124,37 @@ class CustomerProvider extends ChangeNotifier {
   /// the UI can surface the error to the user.
   Future<void> settlePointsEntry(
       int entryId, int customerId, int points) async {
-    // Mark the log entry as settled and deduct points atomically via the DAO
+    debugPrint('[CustomerProvider] settlePointsEntry: entryId=$entryId, customerId=$customerId, points=$points');
     await _pointsDao.settleEntry(entryId, customerId, points);
+    debugPrint('[CustomerProvider] settlePointsEntry: RPC complete');
 
-    // Refresh UI
-    await loadAll();
+    final index = _customers.indexWhere((customer) => customer.id == customerId);
+    if (index != -1) {
+      final current = _customers[index].points;
+      debugPrint('[CustomerProvider] settlePointsEntry: patching customer points from $current to ${(current - points).clamp(0, 2147483647)}');
+      _patchCustomerPoints(customerId, (current - points).clamp(0, 2147483647));
+    }
   }
 
   /// Settles ALL unsettled entries for a customer.
   Future<void> settleAllPoints(int customerId) async {
+    debugPrint('[CustomerProvider] settleAllPoints: customerId=$customerId');
     final unsettled = await _pointsDao.getTotalUnsettledPoints(customerId);
-    if (unsettled == 0) return;
+    debugPrint('[CustomerProvider] settleAllPoints: unsettled=$unsettled');
+    if (unsettled == 0) {
+      debugPrint('[CustomerProvider] settleAllPoints: nothing to settle');
+      return;
+    }
 
-    // Mark all log entries as settled and deduct the points in the DAO.
     await _pointsDao.settleAllForCustomer(customerId);
+    debugPrint('[CustomerProvider] settleAllPoints: RPC complete');
 
-    // Refresh UI
-    await loadAll();
+    final index = _customers.indexWhere((customer) => customer.id == customerId);
+    if (index != -1) {
+      final current = _customers[index].points;
+      debugPrint('[CustomerProvider] settleAllPoints: patching customer points from $current to ${(current - unsettled).clamp(0, 2147483647)}');
+      _patchCustomerPoints(customerId, (current - unsettled).clamp(0, 2147483647));
+    }
   }
 
   Future<List<Map<String, dynamic>>> getDebtors() => _dao.getDebtors();
