@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "475975771479",
+    "project_id": "taqseet-a3170",
+    "storage_bucket": "taqseet-a3170.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:475975771479:android:096ff3362b6960c16a4a12",
+        "android_client_info": {
+          "package_name": "com.example.store_management"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxosrfrQnBztNEElfZi5-Q5vFuXrOYutY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

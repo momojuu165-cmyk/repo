@@ -1,0 +1,67 @@
+name: store_management
+description: فرصتك للتقسيط - نظام إدارة متجر الأدوات الكهربائية والتقسيط
+publish_to: 'none'
+
+version: 3.1.0+10
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ================= CORE =================
+  supabase_flutter: ^2.8.4
+  provider: ^6.1.2
+  shared_preferences: ^2.3.1
+
+  # ================= UTILITIES =================
+  path_provider: ^2.1.2
+  intl: ^0.19.0
+  crypto: ^3.0.3
+  uuid: ^4.4.0
+  collection: ^1.18.0
+
+  # ================= FILES / MEDIA =================
+  image_picker: ^1.1.2
+  file_picker: ^8.0.6
+
+  # ================= NETWORK =================
+  url_launcher: ^6.3.1
+
+  # ================= SHARING / PDF =================
+  share_plus: ^12.0.2
+  pdf: ^3.11.0
+  printing: ^5.13.0
+
+  # ================= UI =================
+  qr_flutter: ^4.1.0
+  fl_chart: ^0.68.0
+  flutter_slidable: ^3.1.0
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+
+  # ================= SCANNER =================
+  mobile_scanner: ^5.2.3
+
+  # ================= NOTIFICATIONS (FIXED) =================
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.2.10
+  flutter_local_notifications: ^17.2.4
+
+  # ================= CONTACTS / PERMISSIONS =================
+  flutter_contacts: ^1.1.9+2
+  permission_handler: ^11.3.1
+  workmanager: ^0.9.0+3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/

@@ -1,0 +1,83 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+}
+
+// ─── Auto-repair Flutter pub cache before every build ───────────────────────
+// This fixes "No such file or directory" errors for async, vector_math, etc.
+// that occur when the pub cache is corrupted or partially downloaded.
+task repairPubCache(type: Exec) {
+    def flutter = System.getenv("FLUTTER_ROOT") ? "${System.getenv("FLUTTER_ROOT")}/bin/flutter" : "flutter"
+    commandLine flutter, "pub", "cache", "repair"
+    ignoreExitValue true
+}
+
+task pubGet(type: Exec, dependsOn: repairPubCache) {
+    def flutter = System.getenv("FLUTTER_ROOT") ? "${System.getenv("FLUTTER_ROOT")}/bin/flutter" : "flutter"
+    workingDir "../../"
+    commandLine flutter, "pub", "get"
+    ignoreExitValue true
+}
+
+afterEvaluate {
+    tasks.matching { it.name == "compileFlutterBuildRelease" || it.name == "compileFlutterBuildDebug" || it.name == "assembleRelease" || it.name == "assembleDebug" }.each { task ->
+        task.dependsOn pubGet
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+android {
+    namespace "com.example.store_management"
+    compileSdk 35
+
+    ndkVersion "27.0.12077973"
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs = ["-Xskip-prerelease-check"]
+    }
+
+    defaultConfig {
+        applicationId "com.example.store_management"
+        minSdkVersion flutter.minSdkVersion
+        targetSdk 35
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21"
+    implementation "androidx.multidex:multidex:2.0.1"
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
